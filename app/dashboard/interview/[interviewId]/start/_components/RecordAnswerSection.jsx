@@ -1,10 +1,14 @@
+/**
+1.
+*/
+
 "use client";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import Webcam from "react-webcam";
 import useSpeechToText from "react-hook-speech-to-text";
-import { Mic, StopCircle } from "lucide-react";
+import { Loader2, Mic, StopCircle } from "lucide-react";
 import { toast } from "sonner";
 import { chatSession } from "@/utils/GeminiAIModel";
 import { db } from "@/utils/db";
@@ -20,6 +24,8 @@ const RecordAnswerSection = ({
   const [userAnswer, setUserAnswer] = useState("");
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
+  
+  //for speech to text, imported from npmjs.com/package/react-hook-speech-to-text
   const {
     error,
     interimResult,
@@ -32,6 +38,8 @@ const RecordAnswerSection = ({
     continuous: true,
     useLegacyResults: false,
   });
+  
+  
   useEffect(() => {
     results.map((result) =>
       setUserAnswer((prevAns) => prevAns + result?.transcript)
@@ -44,22 +52,26 @@ const RecordAnswerSection = ({
     }
   }, [userAnswer]);
 
+  
   const StartStopRecording = async () => {
     if (isRecording) {
+     
       stopSpeechToText();
-      // if (userAnswer?.length < 10) {
-      //   setLoading(false)
-      //   toast("Error while saving your answer,please record again");
-      //   return;
-      // }
-    } else {
+      if (userAnswer?.length < 5) { 
+        setLoading(false)
+        toast("Error while saving your answer,please record again");
+        return;
+      }
+    } else { 
       startSpeechToText();
+     
     }
   };
 
   const UpdateUserAnswer = async () => {
     console.log(userAnswer, "########");
     setLoading(true);
+    
     const feedbackPrompt =
       "Question:" +
       mockInterviewQuestion[activeQuestionIndex]?.question +
@@ -68,15 +80,20 @@ const RecordAnswerSection = ({
       ",Depends on question and user answer for given interview question " +
       " please give use rating for answer and feedback as area of improvement if any" +
       " in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
+      
     console.log(
       "🚀 ~ file: RecordAnswerSection.jsx:38 ~ SaveUserAnswer ~ feedbackPrompt:",
       feedbackPrompt
     );
+    
     const result = await chatSession.sendMessage(feedbackPrompt);
+    
+    
     console.log(
       "🚀 ~ file: RecordAnswerSection.jsx:46 ~ SaveUserAnswer ~ result:",
       result
     );
+    
     const mockJsonResp = result.response
       .text()
       .replace("```json", "")
@@ -86,7 +103,9 @@ const RecordAnswerSection = ({
       "🚀 ~ file: RecordAnswerSection.jsx:47 ~ SaveUserAnswer ~ mockJsonResp:",
       mockJsonResp
     );
+    
     const JsonfeedbackResp = JSON.parse(mockJsonResp);
+    
     const resp = await db.insert(UserAnswer).values({
       mockIdRef: interviewData?.mockId,
       question: mockInterviewQuestion[activeQuestionIndex]?.question,
@@ -99,7 +118,7 @@ const RecordAnswerSection = ({
     });
 
     if (resp) {
-      toast("User Answer recorded successfully");
+      toast.success("User Answer recorded successfully");
       setUserAnswer("");
       setResults([]);
     }
@@ -108,10 +127,19 @@ const RecordAnswerSection = ({
   };
 
   if (error) return <p>Web Speech API is not available in this browser 🤷‍</p>;
-
+  
   return (
     <div className="flex justify-cente items-center flex-col">
+
+      {loading && (
+        <div className="fixed inset-0 bg-black/70 z-[9999] flex flex-col justify-center items-center">
+          <Loader2 className="h-16 w-16 animate-spin text-white mb-4" />
+          <p className="text-white text-lg">Saving your answer...</p>
+        </div>
+      )}
+
       <div className="flex flex-col my-20 justify-center items-center bg-black rounded-lg p-5">
+ 
         <Image
           src={"/webcam.png"}
           width={200}
@@ -125,10 +153,11 @@ const RecordAnswerSection = ({
           mirrored={true}
         />
       </div>
+ 
       <Button
         disabled={loading}
         variant="outline"
-        className="my-10"
+        className="my-3"
         onClick={StartStopRecording}
       >
         {isRecording ? (
@@ -141,9 +170,25 @@ const RecordAnswerSection = ({
           </h2>
         )}
       </Button>
-      {/* <Button onClick={() => console.log("------", userAnswer)}>
-        Show User Answer
-      </Button> */}
+
+      <textarea
+        className="w-full h-32 p-4 mt-2 border rounded-md text-gray-800"
+        placeholder="Your answer will appear here..."
+        value={userAnswer}
+        onChange={(e) => setUserAnswer(e.target.value)}
+      />
+ 
+      <Button
+        className="mt-4 my-2"
+        onClick={UpdateUserAnswer}
+        disabled={loading || !userAnswer.trim()}
+      >
+        {loading ? (
+          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</>
+        ) : (
+          "Save Answer"
+        )}
+      </Button>
     </div>
   );
 };

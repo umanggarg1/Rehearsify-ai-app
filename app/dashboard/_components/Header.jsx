@@ -5,11 +5,13 @@ import { usePathname } from 'next/navigation'
 import React, { useEffect } from 'react'
 
 export const Header = () => {
-    const path=usePathname()
+    const path = usePathname()
+    
     useEffect(()=>{
         console.log(path);
     })
-  return (
+  
+    return (
     <div className='flex p-4 item-center justify-between bg-secondary shadow-sm'>
       
       <Image src={'/logo.svg'} width={80} height={50} alt='logo' style={{ width: "auto", height: "auto" }} />
