@@ -81,6 +81,9 @@ export default function Page() {
 
             <SignIn
               appearance={{
+                layout: {
+                  socialButtonsVariant: "blockButton",
+                },
                 variables: {
                   colorPrimary: "#4845D2",
                   colorBackground: "#0f172a",
@@ -95,9 +98,27 @@ export default function Page() {
                   card: "w-full bg-slate-900 border border-slate-700 shadow-xl",
                   headerTitle: "text-white",
                   headerSubtitle: "text-slate-400",
-                  socialButtonsBlockButton:
-                    "border-slate-700 text-slate-200 hover:bg-slate-800",
-                  socialButtonsBlockButtonText: "text-slate-200",
+                  socialButtons: "gap-2",
+                  socialButtonsBlockButton: {
+                    backgroundColor: "#1e293b",
+                    borderColor: "#334155",
+                    color: "#e2e8f0",
+                  },
+                  socialButtonsBlockButtonText: {
+                    color: "#e2e8f0",
+                    fontWeight: 500,
+                  },
+                  socialButtonsIconButton: {
+                    backgroundColor: "#1e293b",
+                    borderColor: "#334155",
+                  },
+                  socialButtonsProviderIcon: { opacity: 1 },
+                  socialButtonsProviderIcon__github: {
+                    filter: "brightness(0) invert(1)",
+                  },
+                  socialButtonsProviderIcon__apple: {
+                    filter: "brightness(0) invert(1)",
+                  },
                   dividerLine: "bg-slate-700",
                   dividerText: "text-slate-500",
                   formFieldLabel: "text-slate-300",
