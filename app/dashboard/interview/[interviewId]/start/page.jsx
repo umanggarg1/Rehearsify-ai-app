@@ -14,6 +14,7 @@ const StartInterview = ({ params }) => {
   const [mockInterviewQuestion, setMockInterviewQuestion] = useState();
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const param = use(params);
 
   useEffect(() => {
@@ -28,15 +29,17 @@ const StartInterview = ({ params }) => {
         .from(MockInterview)
         .where(eq(MockInterview.mockId, param.interviewId));
       
+      if (!result || result.length === 0) {
+        setNotFound(true);
+        return;
+      }
+
       const jsonMockResp = JSON.parse(result[0].jsonMockResp);
-      
       setMockInterviewQuestion(jsonMockResp);
-      
       setInterviewData(result[0]);
-    
     } catch (error) {
       console.error("Failed to fetch interview details:", error);
-      // Optionally add error toast or error state handling
+      setNotFound(true);
     } finally {
       setIsLoading(false);
     }
@@ -54,9 +57,23 @@ const StartInterview = ({ params }) => {
     return (
       <div className="flex justify-center items-center min-h-screen">
         <div className="text-center">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin" />
-          <p className="mt-4 text-gray-600">Loading interview details...</p>
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-indigo-400" />
+          <p className="mt-4 text-slate-300">Loading interview details...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-center">
+        <h1 className="text-2xl font-bold text-white">Interview not found</h1>
+        <p className="text-slate-400">
+          This interview doesn&apos;t exist or may have been removed.
+        </p>
+        <Link href="/dashboard">
+          <Button>Back to Dashboard</Button>
+        </Link>
       </div>
     );
   }
@@ -64,7 +81,7 @@ const StartInterview = ({ params }) => {
   if (!mockInterviewQuestion || mockInterviewQuestion.length === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <p className="text-red-500">No interview questions found.</p>
+        <p className="text-red-400">No interview questions found.</p>
       </div>
     );
   }

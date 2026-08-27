@@ -4,11 +4,11 @@ import Footer from './_components/Footer';
 
 function DashboardLayout({ children }) {
   return (
-    <div>
+    <div className="min-h-screen bg-slate-800 text-slate-200">
    {/* <Header /> */}
-      <main className="container mx-auto my-8 px-4">
+      <main className="container mx-auto px-4 py-8">
         {children}
-      
+
       </main>
 
     </div>

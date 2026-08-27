@@ -12,7 +12,7 @@ export async function POST(request) {
             .from(UserAnswer)
             .where(eq(UserAnswer.userEmail, userEmail));
 
-        const uniqueMockIdCount = new Set(userAnswers.map(item => item.mockId)).size;
+        const uniqueMockIdCount = new Set(userAnswers.map(item => item.mockIdRef)).size;
 
         return NextResponse.json({ 
             userAnswers: uniqueMockIdCount > 0 ? userAnswers : [] 
