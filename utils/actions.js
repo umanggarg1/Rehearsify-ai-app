@@ -25,6 +25,32 @@ async function requireEmail() {
   return email;
 }
 
+/**
+ * Basic in-memory rate limit for the Gemini-backed actions. Stops one client
+ * from looping requests and running up the API bill. Per-instance only — for
+ * multi-region production, replace with Upstash Ratelimit / Redis.
+ */
+const aiRateHits = new Map(); // email -> number[] (timestamps in ms)
+const AI_LIMIT_PER_MIN = 10;
+const AI_LIMIT_PER_HOUR = 60;
+
+function checkAiRateLimit(email) {
+  const now = Date.now();
+  const recent = (aiRateHits.get(email) || []).filter(
+    (t) => now - t < 3_600_000
+  );
+
+  if (recent.filter((t) => now - t < 60_000).length >= AI_LIMIT_PER_MIN) {
+    throw new Error("You're going too fast — wait a minute and try again.");
+  }
+  if (recent.length >= AI_LIMIT_PER_HOUR) {
+    throw new Error("Hourly request limit reached — please try again later.");
+  }
+
+  recent.push(now);
+  aiRateHits.set(email, recent);
+}
+
 /** Pull the first JSON array/object out of a model response. */
 function extractJson(text) {
   const cleaned = (text || "")
@@ -50,6 +76,7 @@ async function getOwnedInterview(mockId, email) {
 
 export async function createInterview({ jobPosition, jobDesc, jobExperience }) {
   const email = await requireEmail();
+  checkAiRateLimit(email);
 
   if (!jobPosition?.trim() || !jobDesc?.trim() || !jobExperience?.toString().trim()) {
     throw new Error("Missing required fields");
@@ -102,6 +129,7 @@ export async function getInterview(mockId) {
 
 export async function saveAnswer({ mockId, question, correctAns, userAns }) {
   const email = await requireEmail();
+  checkAiRateLimit(email);
 
   const res = await getOwnedInterview(mockId, email);
   if (res.notFound) throw new Error("Interview not found");

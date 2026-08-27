@@ -43,15 +43,24 @@ Priority order. Check off as completed. Details for each item are in `ISSUES.md`
 - [x] Verified: `grep .next/static` finds no `postgresql://` / `neondb_owner` / `AIza…`. Build passes (9/9 pages).
 - [ ] **S6 — YOU MUST DO THIS:** in the hosting dashboard (Vercel/etc.), rename the same two env vars, then **rotate both credentials** (Neon password + Gemini key) — the old values were public in every prior deployed build.
 
-## T20 (now folded into S3/S5)
-Old `api/fetchUserData` deleted; its job is done by the authenticated `getUserAnswers` action.
+## Security hardening
+
+- [x] **T20** `/api/fetchUserData` had no auth — it trusted a `userEmail` in the POST
+  body, so any caller could enumerate anyone's answers. **Fixed:** route deleted in
+  commit `2059a78`; replaced by the `getUserAnswers` server action, which takes no
+  input and derives the email from the Clerk session (`requireEmail()`).
+- [x] **T21** No rate limiting on the AI endpoints — a loop could run up the Gemini
+  bill. **Fixed:** `utils/actions.js` — `checkAiRateLimit(email)` (in-memory, per
+  user) now gates `createInterview` and `saveAnswer` at 10/min and 60/hour; over
+  the cap the action throws and the client shows an error toast. Per-instance only;
+  swap for Upstash Ratelimit / Redis for multi-region production.
 
 ## Progress log
 
 - 2026-08-27: T1–T18 applied; `next build` clean.
 - 2026-08-27: S1–S5 applied — DB/AI moved to authenticated server actions, secrets out of the
   client bundle (verified via grep of `.next/static`). Build passes 9/9. Dev server up.
+- 2026-08-28: T20 confirmed done (route deleted in 2059a78). T21 added — in-memory rate
+  limiter on the two Gemini-backed server actions (10/min, 60/hour per user).
   Outstanding: S6 (rotate creds + update host env), T19 (ESLint).
   Not fixed: `[[...sign-uo]]` folder typo, `middleware.js` `/forum` matcher.
-  Interview-flow + server-action paths verified by build only — not exercised end-to-end
-  (need login + mic + live Gemini).
