@@ -10,11 +10,7 @@ import Webcam from "react-webcam";
 import useSpeechToText from "react-hook-speech-to-text";
 import { Loader2, Mic, StopCircle } from "lucide-react";
 import { toast } from "sonner";
-import { model } from "@/utils/GeminiAIModel";
-import { db } from "@/utils/db";
-import { UserAnswer } from "@/utils/schema";
-import { useUser } from "@clerk/nextjs";
-import moment from "moment";
+import { saveAnswer } from "@/utils/actions";
 
 const RecordAnswerSection = ({
   mockInterviewQuestion,
@@ -23,7 +19,6 @@ const RecordAnswerSection = ({
   onAnswerSave,
 }) => {
   const [userAnswer, setUserAnswer] = useState("");
-  const { user } = useUser();
   const [loading, setLoading] = useState(false);
   
   //for speech to text, imported from npmjs.com/package/react-hook-speech-to-text
@@ -80,39 +75,12 @@ const RecordAnswerSection = ({
   const UpdateUserAnswer = async () => {
     setLoading(true);
 
-    const feedbackPrompt =
-      "Question:" +
-      mockInterviewQuestion[activeQuestionIndex]?.question +
-      ", User Answer:" +
-      userAnswer +
-      ",Depends on question and user answer for given interview question " +
-      " please give use rating for answer and feedback as area of improvement if any" +
-      " in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
-
     try {
-      const chat = model.startChat({ history: [] });
-      const result = await chat.sendMessage(feedbackPrompt);
-
-      const rawText = result.response.text();
-      const cleaned = rawText
-        .replace(/```json/gi, "")
-        .replace(/```/g, "")
-        .trim();
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error("No valid JSON object found in the AI response");
-      }
-      const JsonfeedbackResp = JSON.parse(jsonMatch[0]);
-
-      await db.insert(UserAnswer).values({
-        mockIdRef: interviewData?.mockId,
+      await saveAnswer({
+        mockId: interviewData?.mockId,
         question: mockInterviewQuestion[activeQuestionIndex]?.question,
         correctAns: mockInterviewQuestion[activeQuestionIndex]?.answer,
         userAns: userAnswer,
-        feedback: JsonfeedbackResp?.feedback,
-        rating: JsonfeedbackResp?.rating,
-        userEmail: user?.primaryEmailAddress?.emailAddress,
-        createdAt: moment().format("DD-MM-YYYY"),
       });
 
       toast.success("User Answer recorded successfully");

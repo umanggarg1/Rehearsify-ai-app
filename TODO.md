@@ -32,10 +32,26 @@ Priority order. Check off as completed. Details for each item are in `ISSUES.md`
 - [x] **T17 (D)** `next.config.mjs` — added `outputFileTracingRoot: path.resolve()`.
 - [x] **T18 (D)** `RecordAnswerSection.jsx` — now `model.startChat({ history: [] })` fresh per feedback call instead of the shared `chatSession` singleton.
 - [ ] **T19 (D, optional)** Add ESLint (`eslint` + `eslint-config-next`, flat `eslint.config.mjs`). — NOT DONE
-- [ ] **T20 (security, optional)** `api/fetchUserData/route.js` — gate with Clerk `auth()` and use the session's email instead of trusting the request body. — NOT DONE (changes API contract; needs your call)
+
+## P0 — Secrets in the client bundle (biggest issue)
+
+- [x] **S1** Renamed env vars: `NEXT_PUBLIC_DRIZZLE_DB_URL` → `DATABASE_URL`, `NEXT_PUBLIC_GEMINI_API_KEY` → `GEMINI_API_KEY`. Updated `.env`, `.env.local`, `drizzle.config.js`; added `.env.example`.
+- [x] **S2** `utils/db.js` + `utils/GeminiAIModel.js` now `import "server-only"` (accidental client import = build error). GeminiAIModel no longer `"use client"`; exports `newChatSession()` instead of a shared `chatSession`.
+- [x] **S3** New `utils/actions.js` (`"use server"`) with `createInterview`, `getInterview`, `saveAnswer`, `getFeedback`, `getUserAnswers`, `getInterviewList`. Each calls Clerk `auth()`/`currentUser()`, derives the email server-side, and checks interview ownership (`createdBy === email`) before any read/write.
+- [x] **S4** Rewired every client component (`AddNewInterview`, `interview/[id]/page`, `start/page`, `RecordAnswerSection`, `feedback/page`, `dashboard/page`, `InterviewList`) to call the actions — no more `db.*` or Gemini in the browser.
+- [x] **S5** Deleted `app/api/fetchUserData/route.js` (unauthenticated; replaced by `getUserAnswers`).
+- [x] Verified: `grep .next/static` finds no `postgresql://` / `neondb_owner` / `AIza…`. Build passes (9/9 pages).
+- [ ] **S6 — YOU MUST DO THIS:** in the hosting dashboard (Vercel/etc.), rename the same two env vars, then **rotate both credentials** (Neon password + Gemini key) — the old values were public in every prior deployed build.
+
+## T20 (now folded into S3/S5)
+Old `api/fetchUserData` deleted; its job is done by the authenticated `getUserAnswers` action.
 
 ## Progress log
 
-- 2026-08-27: T1–T18 applied. `next build` passes clean (10/10 pages). Dev server verified up.
-  Still open: T19 (ESLint), T20 (API auth). Not fixed: `[[...sign-uo]]` folder typo (cosmetic, works), `middleware.js` `/forum` matcher (harmless).
-  Interview-flow fixes (T1, T2, T4, T5, T8–T13) are verified by build only — not exercised end-to-end (need login + mic + live Gemini).
+- 2026-08-27: T1–T18 applied; `next build` clean.
+- 2026-08-27: S1–S5 applied — DB/AI moved to authenticated server actions, secrets out of the
+  client bundle (verified via grep of `.next/static`). Build passes 9/9. Dev server up.
+  Outstanding: S6 (rotate creds + update host env), T19 (ESLint).
+  Not fixed: `[[...sign-uo]]` folder typo, `middleware.js` `/forum` matcher.
+  Interview-flow + server-action paths verified by build only — not exercised end-to-end
+  (need login + mic + live Gemini).

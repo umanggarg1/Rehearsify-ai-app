@@ -6,6 +6,7 @@ import { Bot, Plus, ListChecks, Trophy, Zap, TrendingUp } from "lucide-react";
 
 import AddNewInterview from "./_components/AddNewInterview";
 import InterviewList from "./_components/InterviewList";
+import { getUserAnswers } from "@/utils/actions";
 
 function Dashboard() {
   const { user } = useUser();
@@ -31,33 +32,12 @@ function Dashboard() {
 
   const fetchInterviews = async () => {
     if (!user?.primaryEmailAddress?.emailAddress) {
-      toast.error("User email not found");
       return;
     }
 
     try {
-      const response = await fetch("/api/fetchUserData", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userEmail: user.primaryEmailAddress.emailAddress,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch interview data");
-      }
-
-      const data = await response.json();
-
-      // Filter interviews specific to the current user's email
-      const userSpecificInterviews = data.userAnswers.filter(
-        (interview) =>
-          interview.userEmail === user.primaryEmailAddress.emailAddress,
-      );
+      const { answers } = await getUserAnswers();
+      const userSpecificInterviews = answers || [];
 
       setInterviewData(userSpecificInterviews);
 

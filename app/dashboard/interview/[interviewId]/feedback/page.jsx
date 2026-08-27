@@ -6,9 +6,7 @@
 */
 
 "use client";
-import { db } from "@/utils/db";
-import { UserAnswer } from "@/utils/schema";
-import { eq } from "drizzle-orm";
+import { getFeedback } from "@/utils/actions";
 import React, { use, useEffect, useState } from "react";
 import {
   Collapsible,
@@ -35,11 +33,8 @@ const Feedback = ({ params }) => {
 
   const GetFeedback = async () => {
     try {
-      const result = await db
-        .select()
-        .from(UserAnswer)
-        .where(eq(UserAnswer.mockIdRef, param.interviewId))
-        .orderBy(UserAnswer.id);
+      const { answers } = await getFeedback(param.interviewId);
+      const result = answers || [];
 
       setFeedbackList(result);
 

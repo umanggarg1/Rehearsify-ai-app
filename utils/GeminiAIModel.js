@@ -1,11 +1,11 @@
-"use client"
+import "server-only";
 import {
   GoogleGenerativeAI,
   HarmCategory,
   HarmBlockThreshold,
 } from "@google/generative-ai";
 
-const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+const apiKey = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey);
 
 export const model = genAI.getGenerativeModel({
@@ -17,10 +17,9 @@ const generationConfig = {
   topP: 0.95,
   topK: 64,
   maxOutputTokens: 8192,
-  responseMimeType: "text/plain",
+  responseMimeType: "application/json",
 };
 
-// 3. Safety settings to prevent inappropriate content
 const safetySettings = [
   {
     category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -40,8 +39,6 @@ const safetySettings = [
   },
 ];
 
-// 4. Export the chat session (Removed the listModels error)
-export const chatSession = model.startChat({
-  generationConfig,
-  safetySettings,
-});
+/** Start a fresh chat session (don't share one across requests/answers). */
+export const newChatSession = () =>
+  model.startChat({ generationConfig, safetySettings, history: [] });

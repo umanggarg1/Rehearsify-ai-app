@@ -1,13 +1,11 @@
 "use client";
-import { db } from "@/utils/db";
-import { MockInterview } from "@/utils/schema";
 import { useUser } from "@clerk/nextjs";
-import { desc, eq } from "drizzle-orm";
 import React, { useEffect, useState } from "react";
 import InterviewItemCard from "./InterviewItemCard";
+import { getInterviewList } from "@/utils/actions";
 
-// Note: this component fetches its own list (ordered newest-first) rather than
-// consuming a prop, so it stays correct even if the parent passes stale data.
+// Fetches its own list (newest-first) via a server action, so it stays correct
+// even if the parent passes stale data.
 const InterviewList = () => {
   const { user } = useUser();
   const [interviews, setInterviews] = useState([]);
@@ -18,15 +16,8 @@ const InterviewList = () => {
 
   const GetInterviewList = async () => {
     try {
-      const result = await db
-        .select()
-        .from(MockInterview)
-        .where(
-          eq(MockInterview.createdBy, user?.primaryEmailAddress?.emailAddress)
-        )
-        .orderBy(desc(MockInterview.id));
-
-      setInterviews(result);
+      const { interviews: list } = await getInterviewList();
+      setInterviews(list || []);
     } catch (error) {
       console.error("Failed to load interview list:", error);
     }

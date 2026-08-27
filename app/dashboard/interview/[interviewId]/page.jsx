@@ -1,8 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
-import { db } from "@/utils/db";
-import { MockInterview } from "@/utils/schema";
-import { eq } from "drizzle-orm";
+import { getInterview } from "@/utils/actions";
 import {
   ArrowLeft,
   ArrowRight,
@@ -51,15 +49,11 @@ function Interview({ params }) {
 
   const GetInterviewDetails = async () => {
     try {
-      const result = await db
-        .select()
-        .from(MockInterview)
-        .where(eq(MockInterview.mockId, res.interviewId));
-
-      if (result.length > 0) {
-        setInterviewData(result[0]);
-      } else {
+      const { interview, notFound: nf } = await getInterview(res.interviewId);
+      if (nf || !interview) {
         setNotFound(true);
+      } else {
+        setInterviewData(interview);
       }
     } catch (error) {
       setNotFound(true);
