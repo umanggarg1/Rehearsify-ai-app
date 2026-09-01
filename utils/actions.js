@@ -34,6 +34,7 @@ const aiRateHits = new Map(); // email -> number[] (timestamps in ms)
 const AI_LIMIT_PER_MIN = 10;
 const AI_LIMIT_PER_HOUR = 60;
 
+/** Returns an error message if the user is over the limit, else null. */
 function checkAiRateLimit(email) {
   const now = Date.now();
   const recent = (aiRateHits.get(email) || []).filter(
@@ -41,14 +42,46 @@ function checkAiRateLimit(email) {
   );
 
   if (recent.filter((t) => now - t < 60_000).length >= AI_LIMIT_PER_MIN) {
-    throw new Error("You're going too fast — wait a minute and try again.");
+    return "You're going too fast — wait a minute and try again.";
   }
   if (recent.length >= AI_LIMIT_PER_HOUR) {
-    throw new Error("Hourly request limit reached — please try again later.");
+    return "Hourly request limit reached — please try again later.";
   }
 
   recent.push(now);
   aiRateHits.set(email, recent);
+  return null;
+}
+
+/** True for transient upstream errors that are worth retrying. */
+function isRetryable(err) {
+  const status = err?.status ?? err?.response?.status;
+  if (typeof status === "number") return [429, 500, 502, 503, 504].includes(status);
+  const msg = String(err?.message || "");
+  return (
+    /\b(429|500|502|503|504)\b/.test(msg) ||
+    /overloaded|high demand|unavailable|too many requests|rate limit|try again/i.test(
+      msg
+    )
+  );
+}
+
+/**
+ * Send a prompt to Gemini, retrying transient 429/5xx errors with exponential
+ * backoff (1s, 2s, 4s). A fresh chat session per attempt.
+ */
+async function sendMessageWithRetry(prompt, { tries = 3, baseMs = 1000 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    try {
+      return await newChatSession().sendMessage(prompt);
+    } catch (err) {
+      lastErr = err;
+      if (!isRetryable(err) || attempt === tries - 1) throw err;
+      await new Promise((r) => setTimeout(r, baseMs * 2 ** attempt));
+    }
+  }
+  throw lastErr;
 }
 
 /** Pull the first JSON array/object out of a model response. */
@@ -76,7 +109,9 @@ async function getOwnedInterview(mockId, email) {
 
 export async function createInterview({ jobPosition, jobDesc, jobExperience }) {
   const email = await requireEmail();
-  checkAiRateLimit(email);
+
+  const rateMsg = checkAiRateLimit(email);
+  if (rateMsg) return { ok: false, reason: "rate_limited", message: rateMsg };
 
   if (!jobPosition?.trim() || !jobDesc?.trim() || !jobExperience?.toString().trim()) {
     throw new Error("Missing required fields");
@@ -91,10 +126,18 @@ export async function createInterview({ jobPosition, jobDesc, jobExperience }) {
     `candidate's introduction and previous projects; the rest about the role and ` +
     `tech stack. Return ONLY the JSON array.`;
 
-  const chat = newChatSession();
-  const result = await chat.sendMessage(prompt);
-  const questions = extractJson(result.response.text());
+  let result;
+  try {
+    result = await sendMessageWithRetry(prompt);
+  } catch (err) {
+    if (isRetryable(err)) {
+      console.error("Gemini still failing after retries:", err?.message);
+      return { ok: false, reason: "ai_busy" };
+    }
+    throw err;
+  }
 
+  const questions = extractJson(result.response.text());
   if (!Array.isArray(questions) || questions.length === 0) {
     throw new Error("AI did not return any questions");
   }
@@ -110,7 +153,7 @@ export async function createInterview({ jobPosition, jobDesc, jobExperience }) {
     createdAt: moment().format("DD-MM-YYYY"),
   });
 
-  return { mockId };
+  return { ok: true, mockId };
 }
 
 export async function getInterview(mockId) {
@@ -129,7 +172,9 @@ export async function getInterview(mockId) {
 
 export async function saveAnswer({ mockId, question, correctAns, userAns }) {
   const email = await requireEmail();
-  checkAiRateLimit(email);
+
+  const rateMsg = checkAiRateLimit(email);
+  if (rateMsg) return { ok: false, reason: "rate_limited", message: rateMsg };
 
   const res = await getOwnedInterview(mockId, email);
   if (res.notFound) throw new Error("Interview not found");
@@ -140,8 +185,17 @@ export async function saveAnswer({ mockId, question, correctAns, userAns }) {
     `Rate this answer and give feedback as areas of improvement in 3 to 5 lines. ` +
     `Return ONLY JSON: {"rating": "<number 1-10>", "feedback": "<text>"}`;
 
-  const chat = newChatSession();
-  const result = await chat.sendMessage(prompt);
+  let result;
+  try {
+    result = await sendMessageWithRetry(prompt);
+  } catch (err) {
+    if (isRetryable(err)) {
+      console.error("Gemini still failing after retries:", err?.message);
+      return { ok: false, reason: "ai_busy" };
+    }
+    throw err;
+  }
+
   const parsed = extractJson(result.response.text());
 
   await db.insert(UserAnswer).values({

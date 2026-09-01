@@ -5,7 +5,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import useSpeechToText from "react-hook-speech-to-text";
 import { Loader2, Mic, StopCircle } from "lucide-react";
@@ -20,7 +20,12 @@ const RecordAnswerSection = ({
 }) => {
   const [userAnswer, setUserAnswer] = useState("");
   const [loading, setLoading] = useState(false);
-  
+  // `listening` = the user's intent (Record pressed, Stop not yet). It stays
+  // true through the brief gaps when the Web Speech API ends itself on silence.
+  const [listening, setListening] = useState(false);
+  const keepListeningRef = useRef(false);
+  const restartStampsRef = useRef([]);
+
   //for speech to text, imported from npmjs.com/package/react-hook-speech-to-text
   const {
     error,
@@ -38,37 +43,89 @@ const RecordAnswerSection = ({
   
   
   useEffect(() => {
-    // Build the answer from finalized segments only, dropping consecutive
-    // duplicates (Chrome's continuous recognition can emit the same segment
-    // twice).
+    // `results` is the growing list of finalized utterances — join them all.
     const finalText = results
       .map((r) => (typeof r === "string" ? r : r.transcript))
       .map((t) => (t || "").trim())
-      .filter((t, i, arr) => t && t !== arr[i - 1])
+      .filter(Boolean)
       .join(" ")
       .trim();
 
-    // Append the live interim text only while recording, and only if it isn't
-    // just echoing what's already been finalized.
+    // While listening, show the live interim tail too — but skip it if it's just
+    // re-showing what was already finalized (avoids the phrase appearing twice).
     const interim = (interimResult || "").trim();
     const showInterim =
-      isRecording && interim && !finalText.endsWith(interim) ? ` ${interim}` : "";
+      listening && interim && !finalText.endsWith(interim) ? ` ${interim}` : "";
 
     setUserAnswer((finalText + showInterim).trim());
-  }, [results, interimResult, isRecording]);
+  }, [results, interimResult, listening]);
 
-  
-  
+  const beginListening = () => {
+    keepListeningRef.current = true;
+    restartStampsRef.current = [];
+    setListening(true);
+    startSpeechToText();
+  };
+
+  const endListening = () => {
+    keepListeningRef.current = false;
+    setListening(false);
+    stopSpeechToText();
+  };
+
+  // The Web Speech API ends itself after a pause/silence (Chrome ignores
+  // `continuous` in practice). Restart it as long as the user hasn't pressed
+  // Stop, so pauses don't end the recording. Bail out if it thrashes.
+  useEffect(() => {
+    if (isRecording || !keepListeningRef.current) return;
+
+    const now = Date.now();
+    restartStampsRef.current = restartStampsRef.current.filter(
+      (t) => now - t < 10000
+    );
+    if (restartStampsRef.current.length >= 6) {
+      keepListeningRef.current = false;
+      setListening(false);
+      toast.error(
+        "Voice recording keeps dropping — check your mic/connection, or type your answer."
+      );
+      return;
+    }
+    restartStampsRef.current.push(now);
+
+    const id = setTimeout(() => {
+      if (!keepListeningRef.current || isRecording) return;
+      try {
+        startSpeechToText();
+      } catch (e) {
+        console.error("speech restart failed:", e);
+        setTimeout(() => {
+          if (keepListeningRef.current && !isRecording) {
+            try {
+              startSpeechToText();
+            } catch (err) {
+              console.error("speech restart retry failed:", err);
+            }
+          }
+        }, 500);
+      }
+    }, 120); // keep the un-listening gap short so few words are missed
+    return () => clearTimeout(id);
+    // startSpeechToText is intentionally excluded — we only react to isRecording
+    // flipping to false, not to the hook re-creating its callbacks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecording]);
+
   const StartStopRecording = async () => {
-    if (isRecording) {
-      stopSpeechToText();
+    if (listening) {
+      endListening();
       if ((userAnswer?.trim().length ?? 0) < 5) {
         toast("Didn't catch that — please record your answer again.");
       }
     } else {
       setUserAnswer(""); // reset
       setResults([]);
-      startSpeechToText();
+      beginListening();
     }
   };
 
@@ -76,12 +133,23 @@ const RecordAnswerSection = ({
     setLoading(true);
 
     try {
-      await saveAnswer({
+      const res = await saveAnswer({
         mockId: interviewData?.mockId,
         question: mockInterviewQuestion[activeQuestionIndex]?.question,
         correctAns: mockInterviewQuestion[activeQuestionIndex]?.answer,
         userAns: userAnswer,
       });
+
+      if (!res?.ok) {
+        toast.error(
+          res?.reason === "ai_busy"
+            ? "The AI is busy right now. Your answer is still here — try Save again in a moment."
+            : res?.reason === "rate_limited"
+              ? res.message || "Too many requests — slow down a moment."
+              : "Couldn't save your answer. Please try again."
+        );
+        return; // keep userAnswer so they can retry
+      }
 
       toast.success("User Answer recorded successfully");
       setUserAnswer("");
@@ -140,12 +208,12 @@ const RecordAnswerSection = ({
       )}
 
       <Button
-        disabled={loading || !!error}
+        disabled={loading}
         variant="outline"
         className="my-3 border-slate-600 bg-transparent hover:bg-slate-800"
         onClick={StartStopRecording}
       >
-        {isRecording ? (
+        {listening ? (
           <h2 className="text-red-400 items-center animate-pulse flex gap-2">
             <StopCircle /> Stop Recording...
           </h2>
@@ -173,9 +241,9 @@ const RecordAnswerSection = ({
       <Button
         className="mt-4 my-2"
         onClick={async () => {
-          if (isRecording) {
-            stopSpeechToText(); // ✅ stop recording first
-            await new Promise((res) => setTimeout(res, 800)); // ⏳ wait for final transcript
+          if (listening || isRecording) {
+            endListening(); // stop recording first (and don't auto-restart)
+            await new Promise((res) => setTimeout(res, 800)); // wait for final transcript
           }
           await UpdateUserAnswer(); // then save
         }}

@@ -66,14 +66,25 @@ function AddNewInterview() {
     setLoading(true);
 
     try {
-      const { mockId } = await createInterview({
+      const res = await createInterview({
         jobPosition,
         jobDesc: jobDescription,
         jobExperience,
       });
 
+      if (!res?.ok) {
+        toast.error(
+          res?.reason === "ai_busy"
+            ? "The AI is busy right now. Please try again in a moment."
+            : res?.reason === "rate_limited"
+              ? res.message || "Too many requests — slow down a moment."
+              : "Failed to generate interview. Please try again."
+        );
+        return;
+      }
+
       toast.success("Interview questions generated successfully!");
-      router.push(`/dashboard/interview/${mockId}`);
+      router.push(`/dashboard/interview/${res.mockId}`);
     } catch (error) {
       console.error("Error creating interview:", error);
       toast.error("Failed to generate interview. Please try again.");
