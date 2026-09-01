@@ -24,7 +24,10 @@ const RecordAnswerSection = ({
   // true through the brief gaps when the Web Speech API ends itself on silence.
   const [listening, setListening] = useState(false);
   const keepListeningRef = useRef(false);
-  const restartStampsRef = useRef([]);
+  // How many restarts in a row produced NO new transcript. Only a long streak
+  // (mic broken / Brave / offline) is a real failure — pausing to think is not.
+  const failStreakRef = useRef(0);
+  const lastResultsLenRef = useRef(0);
 
   //for speech to text, imported from npmjs.com/package/react-hook-speech-to-text
   const {
@@ -43,6 +46,13 @@ const RecordAnswerSection = ({
   
   
   useEffect(() => {
+    // New finalized transcript arrived -> recognition is healthy, reset the
+    // failure streak used by the auto-restart guard below.
+    if (results.length !== lastResultsLenRef.current) {
+      lastResultsLenRef.current = results.length;
+      failStreakRef.current = 0;
+    }
+
     // `results` is the growing list of finalized utterances — join them all.
     const finalText = results
       .map((r) => (typeof r === "string" ? r : r.transcript))
@@ -62,7 +72,8 @@ const RecordAnswerSection = ({
 
   const beginListening = () => {
     keepListeningRef.current = true;
-    restartStampsRef.current = [];
+    failStreakRef.current = 0;
+    lastResultsLenRef.current = 0;
     setListening(true);
     startSpeechToText();
   };
@@ -75,23 +86,20 @@ const RecordAnswerSection = ({
 
   // The Web Speech API ends itself after a pause/silence (Chrome ignores
   // `continuous` in practice). Restart it as long as the user hasn't pressed
-  // Stop, so pauses don't end the recording. Bail out if it thrashes.
+  // Stop, so pauses don't end the recording. Only give up after many restarts
+  // with no transcript at all (mic broken / Brave / offline).
   useEffect(() => {
     if (isRecording || !keepListeningRef.current) return;
 
-    const now = Date.now();
-    restartStampsRef.current = restartStampsRef.current.filter(
-      (t) => now - t < 10000
-    );
-    if (restartStampsRef.current.length >= 6) {
+    failStreakRef.current += 1;
+    if (failStreakRef.current > 12) {
       keepListeningRef.current = false;
       setListening(false);
       toast.error(
-        "Voice recording keeps dropping — check your mic/connection, or type your answer."
+        "Voice recording keeps dropping — check your microphone, or type your answer below."
       );
       return;
     }
-    restartStampsRef.current.push(now);
 
     const id = setTimeout(() => {
       if (!keepListeningRef.current || isRecording) return;
