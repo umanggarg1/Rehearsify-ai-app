@@ -1,11 +1,25 @@
 "use client";
 import { getInterview } from "@/utils/actions";
 import React, { use, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import QuestionsSection from "./_components/QuestionsSection";
-import RecordAnswerSection from "./_components/RecordAnswerSection";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
+
+// react-webcam and react-hook-speech-to-text touch `window` at import time,
+// so this component must not be server-rendered.
+const RecordAnswerSection = dynamic(
+  () => import("./_components/RecordAnswerSection"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+      </div>
+    ),
+  }
+);
 
 const StartInterview = ({ params }) => {
   const [interViewData, setInterviewData] = useState();

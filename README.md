@@ -301,5 +301,6 @@ production instance.
 - `createdAt` is stored as a `DD-MM-YYYY` string, so time-of-day sorting and
   "improvement over time" analytics are approximate.
 
-See [`TODO.md`](./TODO.md) (bug fixes) and [`TODO2.md`](./TODO2.md) (improvement
-backlog) for the full list.
+See [`TODO.md`](./TODO.md) (bug fixes), [`TODO2.md`](./TODO2.md) (improvement
+backlog), and [`FUTURE-SCOPE.md`](./FUTURE-SCOPE.md) (planned features, e.g.
+optional local interview recording) for the full list.

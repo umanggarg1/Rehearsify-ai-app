@@ -98,13 +98,6 @@ const RecordAnswerSection = ({
     }
   };
 
-  if (error)
-    return (
-      <p className="text-slate-300">
-        Web Speech API is not available in this browser 🤷‍
-      </p>
-    );
-  
   return (
     <div className="flex justify-cente items-center flex-col">
 
@@ -115,29 +108,39 @@ const RecordAnswerSection = ({
         </div>
       )}
 
-      <div className="flex flex-col my-20 justify-center items-center bg-black rounded-lg p-5">
- 
+      <div className="relative flex flex-col my-20 justify-center items-center bg-black rounded-lg p-5 overflow-hidden">
+
         <Image
           src={"/webcam.png"}
-          width={200}
-          height={200}
-          className="absolute"
-          alt="webcam"
+          width={140}
+          height={140}
+          className="absolute opacity-40"
+          alt=""
           priority
         />
         <Webcam
           style={{ height: 300, width: "100%", zIndex: 10 }}
           mirrored={true}
-          audio={true}
-          audioConstraints={{
-            noiseSuppression: true,
-            echoCancellation: true,
+          audio={false}
+          onUserMediaError={(e) => {
+            console.error("Webcam error:", e);
+            toast.error(
+              "Can't access your camera. Check the browser's camera permission and that no other app (Zoom, Teams, OBS…) is using it."
+            );
           }}
         />
       </div>
- 
+
+      {error && (
+        <div className="w-full rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          Speech-to-text isn&apos;t available in this browser (needs Chrome or
+          Edge; Brave blocks it by default). Type your answer in the box below and
+          click <strong>Save Answer</strong>.
+        </div>
+      )}
+
       <Button
-        disabled={loading}
+        disabled={loading || !!error}
         variant="outline"
         className="my-3 border-slate-600 bg-transparent hover:bg-slate-800"
         onClick={StartStopRecording}
@@ -152,6 +155,13 @@ const RecordAnswerSection = ({
           </h2>
         )}
       </Button>
+
+      {!error && (
+        <p className="text-xs text-slate-500">
+          Voice input works best in Chrome or Edge. On other browsers, type your
+          answer below.
+        </p>
+      )}
 
       <textarea
         className="w-full h-32 p-4 mt-2 border border-slate-700 bg-slate-950 rounded-md text-white placeholder:text-slate-500"
